@@ -1,8 +1,8 @@
 # The Ecolog Dotenv File Format (EDF) Specification
 
 **Document ID:** EDF-SPEC-001  
-**Version:** 1.0.0  
-**Date:** 2025-12-15  
+**Version:** 1.0.1  
+**Date:** 2026-01-07  
 **Status:** Draft Standard  
 **Format:** RFC-style specification  
 **Target Audience:** Parser Implementers, DevOps Engineers, IT Specialists
@@ -971,6 +971,83 @@ KEY=${
 **Note on Escape Sequences:**
 The `\$` escape sequence in double quotes (Section 4.2.4) produces a literal `$` character during parsing, which prevents consumers from treating it as interpolation syntax if they implement interpolation later. This provides an explicit way to escape variable references for consumers that do interpolation.
 
+### 4.5. Backtick Command Substitution
+
+Backtick command substitution (`` `command` ``) is legacy shell syntax for capturing command output. Like variable interpolation (Section 4.4), command substitution execution is explicitly OUT OF SCOPE for EDF parsers.
+
+**Scope:** EDF-compliant parsers MUST return backtick syntax as LITERAL TEXT without executing any commands. The parser treats backticks as regular characters.
+
+**Parser Behavior:**
+
+| Context        | Parser Behavior                                     |
+| -------------- | --------------------------------------------------- |
+| Unquoted value | Backticks are literal characters, part of the value |
+| Double-quoted  | Backticks are literal characters, part of the value |
+| Single-quoted  | Backticks are literal characters, part of the value |
+
+**Rationale:**
+
+- **Security:** Command execution introduces severe security risks
+- **Portability:** Command behavior varies across shells and environments
+- **Separation of Concerns:** Parsing must be separate from execution
+
+**Examples:**
+
+```env
+CMD=`whoami`
+```
+
+**Parser returns:** `CMD` = `` `whoami` `` (literal string)
+
+```env
+MSG="Hello `whoami`"
+```
+
+**Parser returns:** `MSG` = `` Hello `whoami` `` (literal string)
+
+```env
+MSG='`literal`'
+```
+
+**Parser returns:** `MSG` = `` `literal` `` (literal string)
+
+**Consumer Responsibility:**
+
+Consumers MAY implement command substitution after parsing. When doing so, consumers SHOULD follow shell-compatible semantics:
+
+| Context        | Consumer Behavior (if implementing substitution)     |
+| -------------- | ---------------------------------------------------- |
+| Unquoted value | `` `cmd` `` MAY be executed and output substituted   |
+| Double-quoted  | `` `cmd` `` MAY be executed and output substituted   |
+| Single-quoted  | `` `cmd` `` MUST remain literal (no substitution)    |
+
+Consumers that implement command substitution MUST:
+
+- Provide appropriate sandboxing and security controls
+- Document which commands are allowed
+- Handle execution errors gracefully
+- Consider the security implications of arbitrary command execution
+
+**Token Recognition for Tooling:**
+
+Parser implementations MAY recognize backtick-delimited sequences (`` `...` ``) as distinct tokens for tooling purposes (syntax highlighting, linting, IDE features). This is an implementation choice and does not affect the parsed value.
+
+When recognized as tokens:
+
+- In **unquoted values**: Parser MAY emit `` `...` `` sequences as `backtick_substitution` tokens
+- In **double-quoted values**: Parser MAY emit `` `...` `` sequences as `backtick_substitution` tokens
+- In **single-quoted values**: Backticks SHOULD NOT receive special token treatment (consistent with single-quote literal semantics)
+
+**Unclosed Backtick Sequences:**
+
+If a parser recognizes backtick sequences as tokens and encounters an unclosed backtick:
+
+- The parser MAY treat the backtick as a literal character (no error)
+- The parser MAY emit a warning or diagnostic for tooling purposes
+- The parser MUST NOT reject the file solely due to an unclosed backtick
+
+This permissive behavior ensures compatibility with values that legitimately contain single backtick characters.
+
 ## 5. Multiline & Backslash Continuation
 
 The specification provides two mechanisms for multiline values: quoted multiline (recommended) and backslash continuation (legacy).
@@ -1304,7 +1381,7 @@ Implementations MUST NOT vary in:
 
 ### 7.2. Version Compatibility
 
-This document specifies **EDF 1.0.0**.
+This document specifies **EDF 1.0.1**.
 
 Implementations MUST clearly state which version of the EDF specification they implement.
 
